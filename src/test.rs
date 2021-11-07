@@ -9,14 +9,11 @@ fn read_wav_file() -> () {
     let path = PathBuf::from("examples/piano_16000.wav");
     let file = match File::open(&path) {
         Ok(x) => x,
-        Err(e) => panic!("Could not open file '{}' in {}: {}", path.display(), std::env::current_dir().unwrap().display(), e),
+        Err(e) => panic!("Could not open file '{}': {}", path.display(), e),
     };
-    println!("File {}", path.display());
-    let mut wave_reader = WaveReader::new(file);
 
-    let wave_file = wave_reader.decode().unwrap();
+    let wave_file = WaveReader::new(file).decode().unwrap();
     let samples = wave_file.samples::<f32>().unwrap();
-    //println!("Decoded data: {:?}", wave_file);
 
     println!("Format: {}", wave_file.format.stringify());
     println!("Bits per sample: {}", wave_file.bits_per_sample);
