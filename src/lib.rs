@@ -65,12 +65,17 @@ pub trait Sample: Sized + std::fmt::Debug {
 impl Sample for u8 {
 
     fn read(cursor: &mut Cursor<Vec<u8>>, format: WaveFormat, bits: u16) -> Result<Self, IoError> {
-        if bits > 8 {
-            return Err(IoError::new(ErrorKind::Unsupported, "{} bits too large for u8"));
-        }
-
         match format {
-            WaveFormat::Pcm => Ok( cursor.read_u8()? ),
+            WaveFormat::Pcm => {
+                match bits {
+                    8 => Ok( cursor.read_u8()? ),
+
+                    /* Unsupported cases */
+                    b if b > 8 => Err(IoError::new(ErrorKind::Unsupported, format!("{} bits too large for u8", bits))),
+                    b if (b % 8 == 0) => Err(IoError::new(ErrorKind::Unsupported, "Bits per sample must be multiple of 8")),
+                    _ => Err(IoError::new(ErrorKind::Unsupported, "Unsupported bits per sample"))
+                }
+            },
             WaveFormat::IeeeFloat => return Err(IoError::new(ErrorKind::Unsupported, "u8 is not capable of storing floating-point samples")),
             _ => return Err(IoError::new(ErrorKind::Unsupported, "Unsupported format type")),
         }
@@ -79,15 +84,15 @@ impl Sample for u8 {
 impl Sample for i16 {
 
     fn read(cursor: &mut Cursor<Vec<u8>>, format: WaveFormat, bits: u16) -> Result<Self, IoError> {
-        if bits > 16 {
-            return Err(IoError::new(ErrorKind::Unsupported, "{} bits too large for i16"));
-        }
-
         match format {
             WaveFormat::Pcm => match bits {
                 8 => Ok( math::map_u8_to_i16(cursor.read_u8()?)  ),
                 16 => Ok( cursor.read_i16(Endian::Little)? ),
-                _ => Err( IoError::new(ErrorKind::Unsupported, ""))
+
+                /* Unsupported cases */
+                b if b > 16 => Err(IoError::new(ErrorKind::Unsupported, format!("{} bits too large for i16", bits))),
+                b if (b % 8 == 0) => Err(IoError::new(ErrorKind::Unsupported, "Bits per sample must be multiple of 8")),
+                _ => Err(IoError::new(ErrorKind::Unsupported, "Unsupported bits per sample"))
             },
             WaveFormat::IeeeFloat => return Err(IoError::new(ErrorKind::Unsupported, "i16 is not capable of storing floating-point samples")),
             _ => return Err(IoError::new(ErrorKind::Unsupported, "Unsupported format type")),
@@ -97,17 +102,17 @@ impl Sample for i16 {
 impl Sample for i32 {
 
     fn read(cursor: &mut Cursor<Vec<u8>>, format: WaveFormat, bits: u16) -> Result<Self, IoError> {
-        if bits > 32 {
-            return Err(IoError::new(ErrorKind::Unsupported, "{} bits too large for i16"));
-        }
-
         match format {
             WaveFormat::Pcm => match bits {
                 8 => Ok( math::map_u8_to_i32(cursor.read_u8()?)  ),
                 16 => Ok( math::map_i16_to_i32(cursor.read_i16(Endian::Little)?) ),
                 24 => Ok( cursor.read_i24(Endian::Little)? ),
                 32 => Ok( cursor.read_i32(Endian::Little)? ),
-                _ => Err( IoError::new(ErrorKind::Unsupported, ""))
+
+                /* Unsupported cases */
+                b if b > 32 => Err(IoError::new(ErrorKind::Unsupported, format!("{} bits too large for i32", bits))),
+                b if (b % 8 == 0) => Err(IoError::new(ErrorKind::Unsupported, "Bits per sample must be multiple of 8")),
+                _ => Err(IoError::new(ErrorKind::Unsupported, "Unsupported bits per sample"))
             },
             WaveFormat::IeeeFloat => return Err(IoError::new(ErrorKind::Unsupported, "i32 is not capable of storing floating-point samples")),
             _ => return Err(IoError::new(ErrorKind::Unsupported, "Unsupported format type")),
@@ -117,10 +122,6 @@ impl Sample for i32 {
 impl Sample for i64 {
 
     fn read(cursor: &mut Cursor<Vec<u8>>, format: WaveFormat, bits: u16) -> Result<Self, IoError> {
-        if bits > 32 {
-            return Err(IoError::new(ErrorKind::Unsupported, "{} bits too large for i16"));
-        }
-
         match format {
             WaveFormat::Pcm => match bits {
                 8 => Ok( math::map_u8_to_i64(cursor.read_u8()?)  ),
@@ -128,9 +129,14 @@ impl Sample for i64 {
                 24 => Ok( math::map_i24_to_i64(cursor.read_i24(Endian::Little)?) ),
                 32 => Ok( math::map_i32_to_i64(cursor.read_i32(Endian::Little)?) ),
                 64 => Ok( cursor.read_i64(Endian::Little)? ),
-                _ => Err( IoError::new(ErrorKind::Unsupported, ""))
+
+                /* Unsupported cases */
+                40 | 48 | 56 => Err( IoError::new(ErrorKind::Unsupported, "Unsupported bits per sample")),
+                b if b > 64 => Err(IoError::new(ErrorKind::Unsupported, format!("{} bits too large for i64", bits))),
+                b if (b % 8 == 0) => Err(IoError::new(ErrorKind::Unsupported, "Bits per sample must be multiple of 8")),
+                _ => Err(IoError::new(ErrorKind::Unsupported, "Unsupported bits per sample"))
             },
-            WaveFormat::IeeeFloat => return Err(IoError::new(ErrorKind::Unsupported, "i32 is not capable of storing floating-point samples")),
+            WaveFormat::IeeeFloat => return Err(IoError::new(ErrorKind::Unsupported, "i64 is not capable of storing floating-point samples")),
             _ => return Err(IoError::new(ErrorKind::Unsupported, "Unsupported format type")),
         }
     }
@@ -138,23 +144,23 @@ impl Sample for i64 {
 impl Sample for f32 {
 
     fn read(cursor: &mut Cursor<Vec<u8>>, format: WaveFormat, bits: u16) -> Result<Self, IoError> {
-        if bits > 32 {
-            return Err(IoError::new(ErrorKind::Unsupported, "{} bits too large for i16"));
-        }
-
         match format {
             WaveFormat::Pcm => match bits {
                 8 => Ok( math::map_u8_to_f32(cursor.read_u8()?)  ),
                 16 => Ok( math::map_i16_to_f32(cursor.read_i16(Endian::Little)?) ),
                 24 => { 
                     let val = cursor.read_i24(Endian::Little)?;
-                    //println!("Reading {} as f32: {}", val, math::map_i24_to_f32(val)); 
                     Ok( math::map_i24_to_f32(val) ) 
                 },
+                /* WARNING: f32 is not capable of precisely representing i32 or i64, distortion may occur */
                 32 => Ok( math::map_i32_to_f32(cursor.read_i32(Endian::Little)?) ),
-                /* WARNING: f32 is not capable of representing i64 */
                 64 => Ok( math::map_i64_to_f32(cursor.read_i64(Endian::Little)?) ),
-                _ => Err( IoError::new(ErrorKind::Unsupported, ""))
+
+                /* Unsupported cases */
+                40 | 48 | 56 => Err( IoError::new(ErrorKind::Unsupported, "Unsupported bits per sample")),
+                b if b > 64 => Err(IoError::new(ErrorKind::Unsupported, format!("{} bit int too large for f32", bits))),
+                b if (b % 8 == 0) => Err(IoError::new(ErrorKind::Unsupported, "Bits per sample must be multiple of 8")),
+                _ => Err(IoError::new(ErrorKind::Unsupported, "Unsupported bits per sample"))
             },
             WaveFormat::IeeeFloat => {
                 match bits {
@@ -162,27 +168,28 @@ impl Sample for f32 {
                     64 => Ok( cursor.read_f64(Endian::Little)? as f32 ),
                     _ => Err(IoError::new(ErrorKind::Unsupported, "Only standard 32-bit and 64-bit floating-point samples are supported."))
                 }
-            }
-            _ => return Err(IoError::new(ErrorKind::Unsupported, "Unsupported format type")),
+            },
+            _ => Err(IoError::new(ErrorKind::Unsupported, "Unsupported format type")),
         }
     }
 }
 impl Sample for f64 {
 
     fn read(cursor: &mut Cursor<Vec<u8>>, format: WaveFormat, bits: u16) -> Result<Self, IoError> {
-        if bits > 32 {
-            return Err(IoError::new(ErrorKind::Unsupported, "{} bits too large for i16"));
-        }
-
         match format {
             WaveFormat::Pcm => match bits {
                 8 => Ok( math::map_u8_to_f64(cursor.read_u8()?)  ),
                 16 => Ok( math::map_i16_to_f64(cursor.read_i16(Endian::Little)?) ),
                 24 => Ok( math::map_i24_to_f64(cursor.read_i24(Endian::Little)?) ),
                 32 => Ok( math::map_i32_to_f64(cursor.read_i32(Endian::Little)?) ),
-                /* WARNING: f64 is not capable of representing i64 */
+                /* WARNING: f64 is not capable of precisely representing i64, distortion may occur */
                 64 => Ok( math::map_i64_to_f64(cursor.read_i64(Endian::Little)?) ),
-                _ => Err( IoError::new(ErrorKind::Unsupported, ""))
+
+                /* Unsupported cases */
+                40 | 48 | 56 => Err( IoError::new(ErrorKind::Unsupported, "Unsupported bits per sample")),
+                b if b > 64 => Err(IoError::new(ErrorKind::Unsupported, format!("{} bit int too large for f64", bits))),
+                b if (b % 8 == 0) => Err(IoError::new(ErrorKind::Unsupported, "Bits per sample must be multiple of 8")),
+                _ => Err(IoError::new(ErrorKind::Unsupported, "Unsupported bits per sample"))
             },
             WaveFormat::IeeeFloat => {
                 match bits {

@@ -40,10 +40,7 @@ where R: SizedDataRead {
 
     pub fn decode(&mut self) -> Result<WaveFile, WaveDecodeError> {
         let mut buf: Vec<u8> = Vec::new();
-        let bytes_read = match self.source.read_to_end(&mut buf) {
-            Ok(len) => len,
-            Err(e) => panic!("Could not read input contents: {:?}", e),
-        };
+        let bytes_read = self.source.read_to_end(&mut buf)?;
 
         let mut cursor: Cursor<Vec<u8>> = Cursor::new(buf);
 
@@ -52,12 +49,13 @@ where R: SizedDataRead {
         let file_size = cursor.read_u32(Endian::Little)? + 8;    /* Adding 8 because the information does not contain file_header and file_size. */
         let file_format = cursor.read_u32(Endian::Little)?;
         if file_header != RIFF_MAGIC || file_format != WAVE_MAGIC {
-            panic!("Source has invalid RIFF WAVE header.");
+            return Err(WaveDecodeError { message: "Source has invalid RIFF WAVE header".to_string() });
         }
 
         if (file_size as usize) != bytes_read {
             /* Buffer does not contain same amount of data that is specified in header */
-            panic!("Bytestream size ({} B) is not equal to specified file size in riff header ({} B)", file_size, bytes_read);
+            /* TODO: Abort or just proceed with actual file size? */
+            return Err(WaveDecodeError { message: format!("Bytestream size ({} B) is not equal to specified file size in riff header ({} B)", file_size, bytes_read) });
         }
 
         let mut wave_file = WaveFile::new();
@@ -95,19 +93,23 @@ where R: SizedDataRead {
                 },
                 Err(e) => {
                     match e.kind() {
-                        ErrorKind::UnexpectedEof => { println!("Unexpected EOF at {} with file size {}", cursor.position(), wave_file.file_size); break; },  // Reached end of file, just leave the loop.
-                        _ => panic!("Read error: {}", e), /* Some other error occured. */
+                        ErrorKind::UnexpectedEof => {
+                            /* Indicates either garbage bytes at the end or another problem */
+                            println!("Unexpected EOF at {} with file size {}", cursor.position(), wave_file.file_size); 
+                            break; 
+                        },
+                        _ => return Err(WaveDecodeError::from(e)),
                     };
                 },
             };
         }
 
         if !has_fmt {
-            panic!("Wave container does not have mandatory fmt chunk.");
+            return Err(WaveDecodeError { message: "WAVE file does not have mandatory format chunk".to_string() });
         }
         if wave_file.format != WaveFormat::Pcm && !has_fact {
             /* If the format is not PCM the file needs to have a fact chunk (see specification Rev. 3). */
-            panic!("Mandatory FACT chunk could not be found in this file.");
+            return Err(WaveDecodeError { message: "Mandatory FACT chunk could not be found in this file".to_string() });
         }
 
         Ok(())
@@ -234,7 +236,6 @@ where R: SizedDataRead {
         let size = cursor.read_u32(Endian::Little)?;
 
         let curr_pos = cursor.position() as usize;
-        println!("Data section at 0x{:x}", curr_pos);
         wave_file.sample_data = (cursor.get_ref()[curr_pos..(curr_pos + (size as usize))]).to_vec();
         cursor.skip_bytes(size)?;
 
